@@ -1,32 +1,43 @@
-# macOS
+# 忽略所有 .iml 文件（IntelliJ IDEA模块文件）
+*.iml
+
+# 忽略所有 .idea 目录及其内容
+.idea/
+
+# 忽略所有 .class 文件
+*.class
+
+# 忽略所有日志文件
+*.log
+
+# 忽略 target 目录（Maven构建输出目录）
+target/
+
+# 忽略编译输出目录
+out/
+build/
+
+# 忽略依赖下载目录（某些项目可能会使用）
+lib/
+libs/
+dependency/
+
+# 忽略操作系统生成的文件
 .DS_Store
+Thumbs.db
 
-# Fleet
-.fleet
+# 忽略用户特定文件
+*.swp
+*.swo
+*~
 
-# jetbrains
-.idea
+# 忽略环境配置文件
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# VsCode
-.vscode
-
-# Node rules
-.grunt
-
-# Node Modules
-node_modules
-
-package-lock.json
-yarn.lock
-
-# Book build output
-_book
-
-# eBook build output
-*.epub
-*.mobi
-*.pdf
-
-# VitePress
-/docs/.vitepress/cache
-/docs/.vitepress/dist
+# 忽略IDE配置文件
+.vscode/
+*.
