@@ -16,18 +16,18 @@ public class HitokotoApi {
     private final WebClient webClient;
 
     public HitokotoApi() {
-        this.webClient = WebClient.create("v1.hitokoto.cn");
+        this.webClient = WebClient.create("https://v1.hitokoto.cn");
     }
     @GetMapping("/say")
     public Mono<String> say() {
-        Map<String, String> param = new HashMap<>();
-        param.put("c", "a,c");
         Mono<String> body = webClient.get()
-                .uri("", param)
+                .uri(uriBuilder -> uriBuilder
+                        .queryParam("c", "a")
+                        .queryParam("c", "c")
+                        .build())
                 .accept(MediaType.APPLICATION_JSON)
                 .retrieve()
                 .bodyToMono(String.class);
         return body;
-
     }
 }
