@@ -1,13 +1,12 @@
 package com.example;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
 import org.reactivestreams.Subscription;
-import reactor.core.publisher.BaseSubscriber;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
-import reactor.core.publisher.SignalType;
+import reactor.core.publisher.*;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.context.Context;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -16,6 +15,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Slf4j
 public class ReactorTest {
     /**
      * Flux是包含N个元素的流，其本身实现了Publisher接口
@@ -341,5 +341,159 @@ public class ReactorTest {
         // zip会取每个流对应位置的元素组成元组，如果流的元素个数不统一，那么多出来的元素会被抛弃
         Flux.zip(Flux.just(1, 2), Flux.just(4, 5), Flux.just(7,8,9))
                 .log().subscribe();
+    }
+
+    @Test
+    public void handleError(){
+        System.out.println("\n========onErrorReturn处理异常=========");
+        // onErrorReturn会吃掉异常，消费者感知不到；会返回一个默认值；流在此会正常结束，不会处理后续的元素
+        Flux.just(1, 2, 0, 3)
+                .map(i -> 100 / i)
+                .onErrorReturn(0)
+                .subscribe(System.out::println);
+
+
+        System.out.println("\n========onErrorResume处理异常=========");
+        // onErrorResume会吃掉异常(看你是否重新抛了)，消费者感知不到；会执行一个回调方法；流在此会正常结束，不会处理后续的元素
+        Flux.just(1, 2, 0, 3)
+                .map(i -> 100 / i)
+                .onErrorResume(e -> Flux.just(0))
+//                .onErrorResume(e -> Flux.error(new RuntimeException("异常处理")))
+                .subscribe(System.out::println);
+
+        System.out.println("\n========onErrorMap处理异常=========");
+        // onErrorMap可以将一种异常转换成另一种异常，消费者可以感知到。
+        Flux.just(1, 2, 0, 3)
+                .map(i -> 100 / i)
+                .onErrorMap(e -> new RuntimeException("异常处理"))
+                .subscribe((value)-> System.out.println(value), e -> System.out.println("异常处理"));
+
+        System.out.println("\n========doOnError处理异常=========");
+        // doOnError就是在异常时做一件事，不会吃掉异常，消费者可感知。
+        Flux.just(1, 2, 0, 3)
+                .map(i -> 100 / i)
+                .doOnError(e -> System.out.println("doOnError： " + e.getMessage()))
+                .subscribe((value)-> System.out.println(value),
+                        e -> System.out.println("异常处理: " + e.getMessage()));
+
+        System.out.println("\n========onErrorContinue处理异常=========");
+        // onErrorContinue，发生异常继续执行，消费者感知不到
+        Flux.just(1, 2, 0, 3, 4)
+                .map(i -> 100 / i)
+                .onErrorContinue((ex, value)->{
+                    System.out.println("检测到错误！");
+                    System.out.println("值为:" +  value);
+                    System.out.println("异常为:" +  ex.getMessage());
+                }).subscribe(value -> System.out.println(value),
+                    err-> System.out.println("异常处理: " + err.getMessage())
+                );
+
+        System.out.println("\n========onErrorComplete处理异常=========");
+        // onErrorComplete，将错误结束信号替换为正常结束信号
+        Flux.just(1, 2, 0, 3, 4)
+                .map(i -> 100 / i)
+                .onErrorComplete()
+                .subscribe(System.out::println);
+
+        System.out.println("\n========onErrorStop处理异常=========");
+        // onErrorStop，错误后从源头上停止流，所以订阅者都会受影响
+        Flux.just(1, 2, 0, 3, 4)
+                .map(i -> 100 / i)
+                .onErrorStop()
+                .subscribe(System.out::println);
+    }
+
+    @Test
+    public void retry() throws InterruptedException {
+        // timeout设置超时时间，retry设置重试次数，它会将流从头到尾重新请求一次
+        Flux.just(1)
+                .log()
+                .delayElements(Duration.ofSeconds(3))
+                .timeout(Duration.ofSeconds(2))
+                .retry(3)
+                .map(i ->  i * 2 )
+                .subscribe();
+        TimeUnit.SECONDS.sleep(7);
+    }
+
+    @Test
+    public void sinks() throws InterruptedException {
+        // 流有冷热之分，一般来说用Flux.just()等方法创建的是冷流，而用本章Sinks的方法创建的就是热流
+        // 冷流的每个订阅者无论订阅的顺序如何，都会从头开始获取完整数据
+        // 热流的订阅者拿不到之前的数据，只能获取订阅后的数据。可以用cache或者replay让后订阅者拿到历史数据
+        Sinks.many(); // 相当于一个Flux
+        Sinks.one(); // 相当于一个Mono
+
+        Sinks.many().unicast(); // 单播，只能被一个消费者订阅
+        Sinks.many().multicast(); // 广播，可被多个消费者订阅
+        Sinks.many().replay(); // 重放，能够让不同时间订阅的消费者都能从头开始订阅数据
+
+        Sinks.Many<Object> all = Sinks.many().replay().all();
+//        Sinks.Many<Object> all = Sinks.many().multicast().onBackpressureBuffer();
+        new Thread(() -> {
+            for (int i = 0; i < 10; i++) {
+                all.tryEmitNext(i);
+            }
+        }).start();
+
+        all.asFlux().subscribe(value-> System.out.println("订阅者1：" + value));
+        TimeUnit.SECONDS.sleep(1);
+        all.asFlux().subscribe(value-> System.out.println("订阅者2：" + value));
+        TimeUnit.SECONDS.sleep(10);
+    }
+
+    /**
+     * 使用blockAPI可以将异步的流变回阻塞式的操作
+     */
+    @Test
+    public void block(){
+        Flux<Integer> flux = Flux.range(1, 10)
+                .map(i -> i * 2);
+
+        Integer first = flux.blockFirst();
+        Integer last = flux.blockLast();
+        List<Integer> list = flux.collectList().block();
+        System.out.println("第一个元素是" + first);
+        System.out.println("最后一个元素是" + last);
+        System.out.println("所有元素是" + list);
+    }
+
+    @Test
+    public void parallel() throws InterruptedException {
+        // 并发批处理流
+        Flux.range(1, 100)
+                .buffer(10)
+                .parallel(4)
+                .runOn(Schedulers.newParallel("xxx"))
+                .log()
+                .subscribe(System.out::println);
+
+        TimeUnit.SECONDS.sleep(5);
+    }
+
+    /**
+     * 在响应式编程中，ThreadLocal会失效，因为流的每个操作可能会切换线程。
+     * 因此contextAPI就是为了解决这个问题，其与流绑定而不是线程
+     * 但用起来还是觉得很别扭，要套很多层
+     * @throws InterruptedException
+     */
+    @Test
+    public void contextAPI() throws InterruptedException {
+        // context是从下游往上游传
+        // 在springmvc中，数据从controller --> service --> dao
+        // 而在响应式编程中， dao --> service --> controller，-->表示订阅关系，dao如何得知参数，由controller从下游往上游传播
+        Mono<String> mono =
+                Mono.just("hello")
+                        .flatMap(v ->
+                                Mono.deferContextual(ctx ->
+                                        Mono.just(v + ", user=" + ctx.get("user"))
+                                )
+                        )
+                        // context由下游传到上游
+                        .contextWrite(Context.of("user", "sky"));
+
+        mono.subscribe(System.out::println);
+        TimeUnit.SECONDS.sleep(3);
+
     }
 }
