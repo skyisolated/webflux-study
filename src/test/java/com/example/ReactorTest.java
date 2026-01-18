@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class ReactorTest {
     /**
@@ -260,4 +261,85 @@ public class ReactorTest {
         TimeUnit.MINUTES.sleep(1);
     }
 
+    @Test
+    public void commonOperations() throws InterruptedException {
+        // filter用来过滤元素
+        System.out.println("\n========filter用来过滤元素=========");
+        Flux.range(1, 10)
+                .filter(i -> (i & 1) == 0)
+                .log()
+                .subscribe();
+
+        // 当你用map()操作返回的不是一个值，而是一个集合或者数组时，可以用flatMap
+        System.out.println("\n========flatMap用来将一个元素变成一个集合=========");
+        Flux.just("Michael Jordon", "Tonny stark")
+                .flatMap(item->{
+                    String[] split = item.split(" ");
+                    return Flux.fromArray(split);
+                }).log().subscribe();
+
+        // 多个流的连接
+        System.out.println("\n========concat可以将多个流合成一个，支持不同类型=========");
+        Flux.concat(Flux.just("1", "2", "3"), Flux.just(4,5,6), Flux.just("test"))
+                .log()
+                .subscribe();
+
+        System.out.println("\n========concatWith也可以合并流，但元素类型必须相同=========");
+        Flux.range(1, 3)
+                .concatWith(Flux.just(4, 5))
+                .log()
+                .subscribe();
+
+        // transform和transformDeferred可以转换整个流
+        System.out.println("\n========transform可以转换整个流，不共享变量=========");
+        AtomicInteger count = new AtomicInteger(0);
+        Flux<String> flux = Flux.just("a", "b", "c")
+                .transform(values -> {
+                    if (count.incrementAndGet() == 1) {
+                        return values.map(String::toUpperCase);
+                    } else {
+                        return values;
+                    }
+                });
+        flux.subscribe(item->System.out.println("订阅者1：" + item));
+        flux.subscribe(item->System.out.println("订阅者2：" + item));
+
+        System.out.println("\n========transformDeferred可以转换整个流，共享变量=========");
+        AtomicInteger cnt = new AtomicInteger(0);
+        Flux<String> deferred = Flux.just("a", "b", "c")
+                .transformDeferred(values -> {
+                    if (cnt.incrementAndGet() == 1) {
+                        return values.map(String::toUpperCase);
+                    } else {
+                        return values;
+                    }
+                });
+        deferred.subscribe(item->System.out.println("订阅者1：" + item));
+        deferred.subscribe(item->System.out.println("订阅者2：" + item));
+
+
+        System.out.println("\n========defaultIfEmpty和switchIfEmpty可以在流为空的时候设置默认值=========");
+        // Flux.empty()是真正的空流，而Flux.just(null)是包含一个null元素的流
+        Flux.empty().defaultIfEmpty("aaa")
+                .log()
+                .subscribe();
+        Flux.empty().switchIfEmpty(Flux.just("bbb"))
+                .log()
+                .subscribe();
+
+        // merge合并流，与concat的区别是，concat是将流进行连接，而merge是按元素接收的时间顺序对流进行合并
+        System.out.println("\n========merge合并流=========");
+        Flux.merge(
+                Flux.just(1, 2).delayElements(Duration.ofSeconds(2)),
+                Flux.just(3, 4).delayElements(Duration.ofSeconds(1)))
+                .log()
+                .subscribe();
+        TimeUnit.SECONDS.sleep(6);
+
+        // zip，看起来是压缩，不如说是配对
+        System.out.println("\n========zip，看起来是压缩，不如说是配对=========");
+        // zip会取每个流对应位置的元素组成元组，如果流的元素个数不统一，那么多出来的元素会被抛弃
+        Flux.zip(Flux.just(1, 2), Flux.just(4, 5), Flux.just(7,8,9))
+                .log().subscribe();
+    }
 }
