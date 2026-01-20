@@ -72,6 +72,24 @@ public class ReactorTest {
     }
 
     /**
+     * defer是延迟加载，值会在每次订阅时重新计算。不同于just是在创建时只计算一次
+     * @throws InterruptedException
+     */
+    @Test
+    public void defer() throws InterruptedException {
+        // 两次订阅返回的时间戳不同，因为defer是在订阅时进行操作
+        Mono<Long> defer = Mono.defer(() -> Mono.just(System.currentTimeMillis()));
+        defer.subscribe(item -> System.out.println("Received1: " + item));
+        TimeUnit.SECONDS.sleep(2);
+        defer.subscribe(item -> System.out.println("Received2: " + item));
+
+        // 两次订阅返回的时间戳相同，因为just是在声明时就直接创建了
+        Mono<Long> just = Mono.just(System.currentTimeMillis());
+        just.subscribe(item -> System.out.println("Received3: " + item));
+        TimeUnit.SECONDS.sleep(2);
+        just.subscribe(item -> System.out.println("Received4: " + item));
+    }
+    /**
      * subscribe方法的使用
      */
     @Test
@@ -414,7 +432,6 @@ public class ReactorTest {
                 .subscribe();
         TimeUnit.SECONDS.sleep(7);
     }
-
     @Test
     public void sinks() throws InterruptedException {
         // 流有冷热之分，一般来说用Flux.just()等方法创建的是冷流，而用本章Sinks的方法创建的就是热流
