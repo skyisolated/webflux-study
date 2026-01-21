@@ -58,4 +58,8 @@ public class HelloController {
 
     }
 
+    @GetMapping("/error")
+    public Mono<String> error(){
+        return Mono.error(new RuntimeException("This is test error"));
+    }
 }
