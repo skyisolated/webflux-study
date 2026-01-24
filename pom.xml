@@ -13,6 +13,7 @@
   <modules>
     <module>reactor-study</module>
     <module>webflux</module>
+    <module>r2dbc-study</module>
   </modules>
   <properties>
     <java.version>17</java.version>
